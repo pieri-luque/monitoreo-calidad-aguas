@@ -91,27 +91,63 @@ if archivo_cargado is not None:
     
     with col_izq:
         st.markdown("### 📈 Tendencia Temporal de Contaminantes")
-        param_grafico = st.selectbox("Selecciona parámetro para graficar:", [p for p in limites_actuales.keys() if p in df_procesado.columns])
         
-        fig_lineas = px.line(
-            df_procesado, x="Fecha", y=param_grafico, color="Estación",
-            markers=True, template="plotly_white", title=f"Evolución de {param_grafico} en el tiempo"
-        )
-        # Añadir línea del límite reglamentario dinámicamente
-        if "max" in limites_actuales[param_grafico]:
-            fig_lineas.add_hline(y=limites_actuales[param_grafico]["max"], line_dash="dash", line_color="red", annotation_text="Límite Máximo ECA")
-        st.plotly_chart(fig_lineas, use_container_width=True)
+        # Creamos la lista de opciones válidas
+        opciones_grafico = [p for p in limites_actuales.keys() if p in df_procesado.columns]
+        
+        if opciones_grafico:
+            param_grafico = st.selectbox("Selecciona parámetro para graficar:", opciones_grafico)
+            
+            # Validamos explícitamente que param_grafico no sea None antes de usarlo
+            if param_grafico:
+                fig_lineas = px.line(
+                    df_procesado, x="Fecha de Muestreo", y=param_grafico, color="Estación de Monitoreo",
+                    markers=True, template="plotly_white", title=f"Evolución de {param_grafico} en el tiempo"
+                )
+                
+                # Añadir línea del límite reglamentario dinámicamente de forma segura
+                if param_grafico in limites_actuales and "max" in limites_actuales[param_grafico]:
+                    fig_lineas.add_hline(y=limites_actuales[param_grafico]["max"], line_dash="dash", line_color="red", annotation_text="Límite Máximo ECA")
+                    
+                st.plotly_chart(fig_lineas, use_container_width=True)
+        else:
+            st.warning("⚠️ No se encontraron parámetros homologados en este archivo para la normativa seleccionada.")
+
 
     with col_der:
         st.markdown("### 🗺️ Distribución Geográfica / Análisis de Variabilidad")
-        if "pH" in df_procesado.columns:
-            fig_box = px.box(
-                df_procesado, x="Estación", y="pH", color="Estación",
-                title="Dispersión del pH por Punto de Muestreo (Estaciones)"
+        
+        # Creamos una lista de opciones dinámicas para el Boxplot basado en lo que SÍ se homologó
+        opciones_box = [p for p in limites_actuales.keys() if p in df_procesado.columns]
+        
+        if opciones_box:
+            # Si el pH está disponible, lo ponemos como predeterminado; si no, toma el primero de la lista
+            index_por_defecto = opciones_box.index("pH") if "pH" in opciones_box else 0
+            
+            param_box = st.selectbox(
+                "Selecciona parámetro para analizar dispersión:", 
+                opciones_box, 
+                index=index_por_defecto,
+                key="sb_boxplot" # Añadimos un key único para que no choque con el otro selectbox
             )
-            fig_box.add_hline(y=limites_actuales["pH"]["max"], line_dash="dot", line_color="red")
-            fig_box.add_hline(y=limites_actuales["pH"]["min"], line_dash="dot", line_color="blue")
-            st.plotly_chart(fig_box, use_container_width=True)
+            
+            if param_box:
+                fig_box = px.box(
+                    df_procesado, x="Estación de Monitoreo", y=param_box, color="Estación de Monitoreo",
+                    template="plotly_white", title=f"Dispersión de {param_box} por Punto de Muestreo"
+                )
+                
+                # Añadir líneas de límites mínimos y máximos dinámicamente según el parámetro seleccionado
+                if param_box in limites_actuales:
+                    if "max" in limites_actuales[param_box]:
+                        fig_box.add_hline(y=limites_actuales[param_box]["max"], line_dash="dot", line_color="red", annotation_text="Límite Máximo")
+                    if "min" in limites_actuales[param_box]:
+                        fig_box.add_hline(y=limites_actuales[param_box]["min"], line_dash="dot", line_color="blue", annotation_text="Límite Mínimo")
+                        
+                st.plotly_chart(fig_box, use_container_width=True)
+        else:
+            st.info("ℹ️ Esperando homologación de parámetros para generar el diagrama de cajas.")
+
 
     # ==============================================================================
     # MOTOR DE EXPORTACIÓN CON FORMATO CONDICIONAL INTEGRADO
@@ -166,3 +202,4 @@ if archivo_cargado is not None:
     )
 else:
     st.warning("👈 Selecciona el Tipo de Agua en el menú e ingresa la plantilla de datos para desplegar los paneles operativos.")
+
